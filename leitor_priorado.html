@@ -1,0 +1,1812 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Folio &amp; Koma — Leitor Universal de Livros e Mangás</title>
+    <!-- Meta tags PWA para instalação como WebApp no Android e iOS -->
+    <meta name="application-name" content="Folio & Koma">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Folio & Koma">
+    <meta name="theme-color" id="meta-theme-color" content="#F6F1E7">
+    <link rel="apple-touch-icon" id="apple-touch-icon-link" href="">
+    <link rel="manifest" id="pwa-manifest-link" href="">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Literata (editorial Kindle), Space Grotesk (mangá/shonen) e Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <!-- PDF.js via CDN Oficial -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Literata', 'Georgia', 'serif'],
+                        manga: ['Space Grotesk', 'sans-serif'],
+                    },
+                    colors: {
+                        book: {
+                            bg: '#F6F1E7',
+                            surface: '#EDE5D5',
+                            text: '#2C2621',
+                            muted: '#6E645B',
+                            border: '#DFD4C0',
+                            accent: '#B45309',
+                            accentHover: '#92400E'
+                        },
+                        manga: {
+                            bg: '#09090B',
+                            surface: '#121216',
+                            text: '#F4F4F5',
+                            muted: '#A1A1AA',
+                            border: '#27272A',
+                            violet: '#8B5CF6',
+                            cyan: '#06B6D4'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Variáveis dinâmicas por Modo (Livros vs. Mangás) e Sub-temas */
+        :root {
+            --bg-main: #F6F1E7;
+            --bg-surface: #EDE5D5;
+            --text-main: #2C2621;
+            --text-muted: #6E645B;
+            --border-color: #DFD4C0;
+            --accent-primary: #B45309;
+            --accent-secondary: #D97706;
+            --book-shadow: 0 22px 50px rgba(44, 38, 33, 0.14), 0 4px 12px rgba(44, 38, 33, 0.08);
+            --pdf-filter: none;
+        }
+
+        /* Sub-tema Sépia (Aba Livros) */
+        [data-mode="books"][data-subtheme="sepia"] {
+            --bg-main: #EFE4CE;
+            --bg-surface: #E3D4B7;
+            --text-main: #3B2E1E;
+            --text-muted: #75624B;
+            --border-color: #D2C09E;
+            --pdf-filter: sepia(0.32) brightness(0.96) contrast(0.96);
+        }
+
+        /* Sub-tema Noturno (Aba Livros) */
+        [data-mode="books"][data-subtheme="night"] {
+            --bg-main: #141312;
+            --bg-surface: #1E1C1A;
+            --text-main: #E7E2D8;
+            --text-muted: #9E9589;
+            --border-color: #2E2B28;
+            --book-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+            --pdf-filter: invert(0.89) hue-rotate(180deg) brightness(0.91) contrast(0.93);
+        }
+
+        /* Modo Mangás (Inspirado em Solo Leveling, Mob Psycho 100, Kaiju No. 8, Black Clover) */
+        [data-mode="manga"] {
+            --bg-main: #09090B;
+            --bg-surface: #121216;
+            --text-main: #F4F4F5;
+            --text-muted: #A1A1AA;
+            --border-color: #27272A;
+            --accent-primary: #8B5CF6;
+            --accent-secondary: #06B6D4;
+            --book-shadow: 0 25px 65px rgba(139, 92, 246, 0.18), 0 8px 24px rgba(0, 0, 0, 0.8);
+            --pdf-filter: none;
+        }
+
+        /* Sub-tema Mangá Alto Contraste */
+        [data-mode="manga"][data-subtheme="contrast"] {
+            --pdf-filter: contrast(1.12) brightness(1.02);
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            transition: background-color 0.35s ease, color 0.35s ease;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .surface-panel {
+            background-color: var(--bg-surface);
+            border-color: var(--border-color);
+            transition: background-color 0.35s ease, border-color 0.35s ease;
+        }
+
+        .accent-bg {
+            background-color: var(--accent-primary);
+            color: #FFFFFF;
+        }
+
+        .accent-text {
+            color: var(--accent-primary);
+        }
+
+        .book-container {
+            box-shadow: var(--book-shadow);
+            transition: box-shadow 0.35s ease, transform 0.25s ease;
+        }
+
+        .pdf-canvas-render {
+            filter: var(--pdf-filter);
+            transition: filter 0.3s ease;
+        }
+
+        /* Camada física de Luz Quente estilo Kindle Paperwhite (anti-luz azul) */
+        #warm-light-overlay {
+            background-color: rgba(255, 166, 64, 0);
+            mix-blend-mode: multiply;
+            transition: background-color 0.2s ease;
+        }
+
+        [data-mode="books"][data-subtheme="night"] #warm-light-overlay,
+        [data-mode="manga"] #warm-light-overlay {
+            mix-blend-mode: screen;
+        }
+
+        /* Lombada central realista para visualização de 2 páginas */
+        .book-spine-shadow {
+            background: linear-gradient(
+                90deg,
+                rgba(0, 0, 0, 0) 0%,
+                rgba(0, 0, 0, 0.05) 44%,
+                rgba(0, 0, 0, 0.18) 50%,
+                rgba(0, 0, 0, 0.05) 56%,
+                rgba(0, 0, 0, 0) 100%
+            );
+        }
+
+        [data-mode="manga"] .book-spine-shadow,
+        [data-subtheme="night"] .book-spine-shadow {
+            background: linear-gradient(
+                90deg,
+                rgba(0, 0, 0, 0) 0%,
+                rgba(0, 0, 0, 0.3) 44%,
+                rgba(0, 0, 0, 0.75) 50%,
+                rgba(0, 0, 0, 0.3) 56%,
+                rgba(0, 0, 0, 0) 100%
+            );
+        }
+
+        /* Aura sutil inspirada em portais / energia psíquica no modo Mangás */
+        .manga-aura-glow {
+            background: radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.16), rgba(6, 182, 212, 0.06) 45%, transparent 75%);
+        }
+
+        @keyframes pageTurnAnim {
+            from { opacity: 0.45; transform: scale(0.994); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .page-animate {
+            animation: pageTurnAnim 0.2s ease-out forwards;
+        }
+
+        /* Sliders personalizados */
+        input[type="range"] {
+            accent-color: var(--accent-primary);
+        }
+
+        /* Scrollbar discreta */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(128, 128, 128, 0.25);
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body data-mode="books" data-subtheme="paper" class="min-h-screen flex flex-col overflow-x-hidden antialiased">
+
+    <!-- Camada física de Luz Quente Kindle (pointer-events-none para não bloquear cliques) -->
+    <div id="warm-light-overlay" class="fixed inset-0 z-40 pointer-events-none"></div>
+
+    <!-- Notificação Toast Flutuante -->
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 -translate-y-4">
+        <div id="toast-message" class="surface-panel border px-4 py-2 rounded-full shadow-lg text-xs sm:text-sm font-medium flex items-center gap-2">
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TELA INICIAL PÚBLICA: ABAS LIVROS (KINDLE) & MANGÁS (DARK SHONEN)     -->
+    <!-- ===================================================================== -->
+    <div id="welcome-screen" class="flex-1 flex flex-col min-h-screen relative overflow-hidden">
+        <!-- Efeito de aura sutil exclusivo do modo Mangás -->
+        <div id="manga-bg-effect" class="hidden manga-aura-glow absolute inset-0 pointer-events-none"></div>
+
+        <!-- Barra Superior de Navegação -->
+        <header class="w-full max-w-6xl mx-auto px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-3 z-10">
+            <!-- Marca da Plataforma -->
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl accent-bg flex items-center justify-center shadow-sm">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                </div>
+                <span class="font-bold text-base sm:text-lg tracking-tight">Folio <span class="accent-text">&amp;</span> Koma</span>
+            </div>
+
+            <!-- Seletor Principal de Abas: Livros vs. Mangás -->
+            <nav class="surface-panel border p-1 rounded-2xl flex items-center gap-1 shadow-sm" aria-label="Modo de Leitura">
+                <button type="button" id="tab-books-btn" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 accent-bg shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                    <span>Livros</span>
+                </button>
+                <button type="button" id="tab-manga-btn" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 opacity-75 hover:opacity-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span>Mangás</span>
+                </button>
+            </nav>
+
+            <!-- Controle Rápido de Luz Quente + Botão Instalar WebApp -->
+            <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 surface-panel border px-3 py-1.5 rounded-xl text-xs">
+                    <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                    <span class="font-medium hidden md:inline">Luz Quente</span>
+                    <input type="range" id="welcome-warm-slider" min="0" max="60" value="15" class="w-16 sm:w-20 h-1.5 rounded-lg cursor-pointer">
+                </div>
+
+                <button type="button" id="install-pwa-btn" title="Adicionar à tela inicial do celular como aplicativo" class="surface-panel border px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 hover:opacity-85 transition-all">
+                    <svg class="w-4 h-4 accent-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                    <span>Instalar App</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Conteúdo Central Adaptável à Aba Selecionada -->
+        <main class="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-8 py-6 flex flex-col items-center space-y-8 z-10">
+            
+            <!-- Cabeçalho Dinâmico da Aba -->
+            <div class="space-y-3 text-center pt-2">
+                <div id="mode-badge" class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full surface-panel border text-xs font-semibold tracking-wide uppercase accent-text">
+                    <span>Conforto Estilo Kindle • Leitura Ocidental</span>
+                </div>
+
+                <h1 id="hero-title" class="font-serif text-3xl sm:text-5xl font-bold tracking-tight">
+                    Leia seus livros com o conforto do papel.
+                </h1>
+
+                <p id="hero-subtitle" class="text-sm sm:text-base max-w-xl mx-auto opacity-80 leading-relaxed">
+                    Anexe qualquer romance, apostila ou documento PDF. O arquivo fica salvo na estante do seu aparelho junto com a página onde você parou.
+                </p>
+            </div>
+
+            <!-- SEÇÃO: SUA ESTANTE SALVA (INDEXEDDB) -->
+            <section id="bookshelf-section" class="hidden w-full space-y-3">
+                <div class="flex items-center justify-between px-1">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 accent-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                        </svg>
+                        <h2 id="bookshelf-title" class="text-sm sm:text-base font-bold tracking-tight">Continuar Lendo • Sua Estante</h2>
+                    </div>
+                    <span id="bookshelf-count" class="text-xs font-medium opacity-65">0 salvos</span>
+                </div>
+
+                <div id="bookshelf-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    <!-- Cards dos PDFs salvos no IndexedDB são renderizados aqui -->
+                </div>
+            </section>
+
+            <!-- Área de Upload (Arrastar e Soltar ou Selecionar Arquivo) -->
+            <div id="drop-zone" class="w-full surface-panel border-2 border-dashed rounded-3xl p-7 sm:p-10 transition-all duration-300 cursor-pointer group relative overflow-hidden hover:shadow-lg text-center">
+                <input type="file" id="pdf-file-input" accept="application/pdf" class="hidden">
+
+                <div class="flex flex-col items-center space-y-3.5">
+                    <div id="upload-icon-box" class="w-14 h-14 rounded-2xl accent-bg flex items-center justify-center shadow-md group-hover:scale-105 transition-transform duration-300">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                    </div>
+
+                    <div class="space-y-1">
+                        <h2 id="upload-heading" class="text-base sm:text-lg font-bold">Adicionar novo PDF à estante</h2>
+                        <p id="upload-hint" class="text-xs sm:text-sm opacity-75">O arquivo completo e o marcador de página ficam salvos offline neste dispositivo</p>
+                    </div>
+
+                    <button type="button" id="select-file-btn" class="mt-1 px-6 py-3 rounded-xl accent-bg font-semibold text-sm shadow-md transition-all active:scale-95 flex items-center gap-2 hover:opacity-95">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        <span id="select-btn-label">Anexar Livro PDF</span>
+                    </button>
+
+                    <!-- Badges de Recursos -->
+                    <div id="feature-pills" class="flex flex-wrap items-center justify-center gap-2 pt-2 text-[11px] font-medium opacity-75">
+                        <span class="px-2.5 py-1 rounded-lg bg-black/5 dark:bg-white/5">Salvo Offline no Aparelho</span>
+                        <span class="px-2.5 py-1 rounded-lg bg-black/5 dark:bg-white/5">Marcador Automático</span>
+                        <span id="direction-pill" class="px-2.5 py-1 rounded-lg bg-black/5 dark:bg-white/5">Avança pela Direita →</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botão de Demonstração Rápida -->
+            <div class="pb-6">
+                <button type="button" id="load-demo-btn" class="px-5 py-2.5 rounded-xl surface-panel border text-xs sm:text-sm font-medium transition-all hover:opacity-90 flex items-center gap-2 mx-auto">
+                    <svg class="w-4 h-4 accent-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span id="demo-btn-label">Testar Leitor com Amostra de Livro</span>
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL DE INSTALAÇÃO DO WEBAPP NA TELA INICIAL (ANDROID / IOS)         -->
+    <!-- ===================================================================== -->
+    <div id="pwa-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="surface-panel border rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 relative animate-fade-in">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl accent-bg flex items-center justify-center shadow-md shrink-0">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base">Instalar Folio &amp; Koma</h3>
+                        <p class="text-xs opacity-70">Use em tela cheia direto da tela inicial</p>
+                    </div>
+                </div>
+                <button type="button" id="close-pwa-modal-btn" class="p-1.5 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="space-y-3 text-xs sm:text-sm">
+                <div class="p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 space-y-1.5">
+                    <p class="font-bold flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        No Android (Chrome / Edge / Brave)
+                    </p>
+                    <p class="opacity-80 leading-relaxed">
+                        Toque no menu <strong>⋮</strong> (três pontinhos no canto superior direito do navegador) e selecione <strong>"Adicionar à tela inicial"</strong> ou <strong>"Instalar aplicativo"</strong>.
+                    </p>
+                </div>
+
+                <div class="p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 space-y-1.5">
+                    <p class="font-bold flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+                        No iPhone / iPad (Safari)
+                    </p>
+                    <p class="opacity-80 leading-relaxed">
+                        Toque no botão <strong>Compartilhar</strong> (ícone de quadrado com seta para cima na barra inferior) e escolha <strong>"Adicionar à Tela de Início"</strong>.
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-1">
+                <button type="button" id="trigger-native-install-btn" class="hidden px-4 py-2.5 rounded-xl accent-bg text-xs font-semibold shadow-md">
+                    Instalar Agora
+                </button>
+                <button type="button" id="confirm-pwa-modal-btn" class="px-5 py-2.5 rounded-xl surface-panel border text-xs font-semibold hover:opacity-85">
+                    Entendi
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TELA DO LEITOR EM TELA CHEIA (LIVROS & MANGÁS)                        -->
+    <!-- ===================================================================== -->
+    <div id="reader-screen" class="hidden flex-1 flex flex-col h-screen relative overflow-hidden">
+        
+        <!-- BARRA SUPERIOR DE FERRAMENTAS -->
+        <header id="reader-header" class="surface-panel border-b px-3 sm:px-5 py-2 flex items-center justify-between gap-2 z-30 transition-all duration-300">
+            
+            <!-- Esquerda: Voltar + Título + Trocar Modo (Livro / Mangá) -->
+            <div class="flex items-center gap-2 min-w-0">
+                <button id="back-home-btn" title="Trocar arquivo ou voltar ao início" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 transition-colors flex items-center gap-1.5 text-xs sm:text-sm font-semibold shrink-0">
+                    <svg class="w-4 h-4 accent-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    <span class="hidden md:inline">Trocar PDF</span>
+                </button>
+
+                <div class="h-4 w-[1px] bg-current opacity-15 hidden sm:block"></div>
+
+                <h1 id="book-title-display" class="text-xs sm:text-sm font-semibold truncate max-w-[110px] sm:max-w-[200px] lg:max-w-xs">
+                    Documento
+                </h1>
+
+                <!-- Botão Rápido de Sentido de Leitura (Ocidental vs. Mangá Japonês) -->
+                <button id="toggle-direction-btn" title="Alternar sentido de leitura (Ocidental → ou Mangá Japonês ←)" class="px-2.5 py-1.5 rounded-xl surface-panel border text-[11px] font-semibold flex items-center gap-1.5 hover:opacity-85 transition-all shrink-0">
+                    <span id="direction-badge-text">Livro (→)</span>
+                </button>
+            </div>
+
+            <!-- Centro: Sub-temas e Controle de Luz Quente Kindle -->
+            <div class="flex items-center gap-2">
+                <!-- Seletor de Temas de Página (Dinâmico conforme Livro ou Mangá) -->
+                <div id="book-themes-group" class="flex items-center gap-1 surface-panel border p-1 rounded-xl">
+                    <button type="button" onclick="setSubtheme('paper')" title="Papel Kindle" class="subtheme-btn px-2 py-1 rounded-lg text-[11px] font-medium transition-all" data-sub="paper">Papel</button>
+                    <button type="button" onclick="setSubtheme('sepia')" title="Sépia" class="subtheme-btn px-2 py-1 rounded-lg text-[11px] font-medium transition-all" data-sub="sepia">Sépia</button>
+                    <button type="button" onclick="setSubtheme('night')" title="Noturno" class="subtheme-btn px-2 py-1 rounded-lg text-[11px] font-medium transition-all" data-sub="night">Noturno</button>
+                </div>
+
+                <div id="manga-themes-group" class="hidden flex items-center gap-1 surface-panel border p-1 rounded-xl">
+                    <button type="button" onclick="setSubtheme('original')" title="Arte Original" class="subtheme-btn px-2 py-1 rounded-lg text-[11px] font-medium transition-all" data-sub="original">Original</button>
+                    <button type="button" onclick="setSubtheme('contrast')" title="Alto Contraste (Tinta Nítida)" class="subtheme-btn px-2 py-1 rounded-lg text-[11px] font-medium transition-all" data-sub="contrast">Contraste</button>
+                </div>
+
+                <!-- Controle Deslizante de Luz Quente (Estilo Kindle) -->
+                <div class="hidden md:flex items-center gap-2 surface-panel border px-2.5 py-1 rounded-xl" title="Ajustar Luz Quente para conforto ocular noturno">
+                    <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                    <input type="range" id="reader-warm-slider" min="0" max="60" value="15" class="w-16 lg:w-20 h-1.5 rounded-lg cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Direita: 1/2 Páginas, Zoom, Ajustar, Tela Cheia e Modo Foco -->
+            <div class="flex items-center gap-1">
+                <!-- Alternar 1 Página / 2 Páginas -->
+                <button id="toggle-spread-btn" title="Alternar entre 1 Página ou 2 Páginas lado a lado" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 transition-colors flex items-center gap-1 text-xs font-medium">
+                    <svg id="icon-single-page" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <rect x="6" y="3" width="12" height="18" rx="2" stroke-width="2"/>
+                    </svg>
+                    <svg id="icon-double-page" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                    <span id="spread-label" class="hidden xl:inline">1 Pág.</span>
+                </button>
+
+                <!-- Controles de Zoom e Ajustar à Tela -->
+                <div class="hidden sm:flex items-center surface-panel border rounded-xl px-1 py-0.5">
+                    <button id="zoom-out-btn" title="Diminuir Zoom" class="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                    </button>
+                    <button id="zoom-reset-btn" title="Ajustar página à tela (100%)" class="text-[11px] font-semibold px-1.5 min-w-[44px] text-center hover:opacity-75">100%</button>
+                    <button id="zoom-in-btn" title="Aumentar Zoom" class="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    </button>
+                </div>
+
+                <!-- Tela Cheia -->
+                <button id="fullscreen-btn" title="Tela Cheia" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                    </svg>
+                </button>
+
+                <!-- Ocultar Barras (Modo Imersivo) -->
+                <button id="toggle-hud-btn" title="Ocultar barras para leitura imersiva" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Botão Flutuante para Restaurar Barras no Modo Imersivo -->
+        <button id="restore-hud-btn" class="hidden fixed top-4 right-4 z-40 surface-panel border px-3.5 py-2 rounded-full shadow-lg text-xs font-semibold flex items-center gap-1.5 opacity-80 hover:opacity-100 transition-opacity">
+            <svg class="w-4 h-4 accent-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+            <span>Mostrar Menus</span>
+        </button>
+
+        <!-- PALCO DE LEITURA + ZONAS LATERAIS DE CLIQUE -->
+        <div id="reading-stage" class="flex-1 relative flex items-center justify-center overflow-auto p-3 sm:p-6">
+            
+            <!-- ZONA CLICÁVEL ESQUERDA -->
+            <div id="click-zone-left" class="fixed inset-y-14 left-0 w-[26%] sm:w-[30%] z-20 cursor-pointer group flex items-center justify-start pl-3 sm:pl-6">
+                <div class="px-3 py-2 rounded-full surface-panel border shadow-lg flex items-center gap-1.5 opacity-0 group-hover:opacity-95 transition-all duration-200 -translate-x-2 group-hover:translate-x-0 pointer-events-none">
+                    <svg class="w-4 h-4 accent-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    <span id="left-zone-label" class="text-xs font-semibold hidden sm:inline">Voltar</span>
+                </div>
+            </div>
+
+            <!-- ZONA CLICÁVEL DIREITA -->
+            <div id="click-zone-right" class="fixed inset-y-14 right-0 w-[26%] sm:w-[30%] z-20 cursor-pointer group flex items-center justify-end pr-3 sm:pr-6">
+                <div class="px-3 py-2 rounded-full surface-panel border shadow-lg flex items-center gap-1.5 opacity-0 group-hover:opacity-95 transition-all duration-200 translate-x-2 group-hover:translate-x-0 pointer-events-none">
+                    <span id="right-zone-label" class="text-xs font-semibold hidden sm:inline">Avançar</span>
+                    <svg class="w-4 h-4 accent-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- ZONA CENTRAL PARA TOQUE EM CELULARES -->
+            <div id="click-zone-center" class="fixed inset-y-14 left-[26%] right-[26%] sm:left-[30%] sm:right-[30%] z-10 cursor-pointer"></div>
+
+            <!-- MOLDURA DAS PÁGINAS -->
+            <div id="book-wrapper" class="book-container relative rounded-lg sm:rounded-xl overflow-hidden bg-white flex items-center justify-center z-0 my-auto">
+                
+                <!-- Container de Renderização do PDF -->
+                <div id="pdf-pages-container" class="flex items-center justify-center relative">
+                    <canvas id="pdf-canvas-left" class="pdf-canvas-render block"></canvas>
+                    <canvas id="pdf-canvas-right" class="pdf-canvas-render hidden"></canvas>
+                    <div id="spine-overlay" class="hidden book-spine-shadow absolute inset-y-0 left-1/2 -translate-x-1/2 w-12 pointer-events-none"></div>
+                </div>
+
+                <!-- Container de Amostra Interativa (Caso o usuário clique em Testar Amostra) -->
+                <div id="sample-book-container" class="hidden w-full max-w-4xl"></div>
+
+                <!-- Loader de Renderização -->
+                <div id="page-loader" class="hidden absolute inset-0 bg-black/15 backdrop-blur-[1px] flex items-center justify-center">
+                    <div class="surface-panel border px-4 py-2 rounded-full shadow-md flex items-center gap-2 text-xs font-semibold">
+                        <svg class="animate-spin h-4 w-4 accent-text" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Carregando página...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RODAPÉ DE NAVEGAÇÃO E BARRA DE PROGRESSO -->
+        <footer id="reader-footer" class="surface-panel border-t px-4 sm:px-8 py-2.5 z-30 transition-all duration-300">
+            <div class="max-w-4xl mx-auto flex flex-col gap-2">
+                <!-- Linha 1: Botões e Slider (Inverte direção automaticamente no modo Mangá!) -->
+                <div class="flex items-center gap-3">
+                    <button id="footer-left-btn" class="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors accent-text disabled:opacity-30">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7"/></svg>
+                    </button>
+
+                    <div class="flex-1 flex items-center">
+                        <input type="range" id="page-slider" min="1" max="1" value="1" class="w-full h-1.5 rounded-lg cursor-pointer">
+                    </div>
+
+                    <button id="footer-right-btn" class="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors accent-text disabled:opacity-30">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                </div>
+
+                <!-- Linha 2: Salto direto de página, Dica de direção e Percentual -->
+                <div class="flex items-center justify-between text-xs opacity-85">
+                    <div class="flex items-center gap-2">
+                        <span>Página</span>
+                        <input type="number" id="page-number-input" min="1" value="1" class="w-16 px-2 py-0.5 rounded-md surface-panel border text-center font-bold focus:outline-none">
+                        <span>de <strong id="total-pages-display">1</strong></span>
+                    </div>
+
+                    <div id="footer-hint-text" class="hidden sm:block opacity-75 font-medium">
+                        Clique na direita para avançar • Setas ← →
+                    </div>
+
+                    <div class="font-bold accent-text">
+                        <span id="progress-percent-display">0%</span> lido
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        /**
+         * ESTADO GLOBAL DA APLICAÇÃO E REFERÊNCIAS DO DOM (ELS)
+         */
+        const state = {
+            appMode: 'books',
+            subtheme: 'paper',
+            warmth: 15,
+            isRtl: false,
+            viewType: 'welcome',
+            pdfDoc: null,
+            fileId: null,
+            fileName: '',
+            currentPage: 1,
+            totalPages: 1,
+            isDoublePage: false,
+            zoomMultiplier: 1.0,
+            hudVisible: true,
+            isRendering: false,
+            pendingPage: null
+        };
+
+        const els = {
+            warmOverlay: document.getElementById('warm-light-overlay'),
+            toastContainer: document.getElementById('toast-container'),
+            toastMessage: document.getElementById('toast-message'),
+            welcomeScreen: document.getElementById('welcome-screen'),
+            mangaBgEffect: document.getElementById('manga-bg-effect'),
+            tabBooksBtn: document.getElementById('tab-books-btn'),
+            tabMangaBtn: document.getElementById('tab-manga-btn'),
+            welcomeWarmSlider: document.getElementById('welcome-warm-slider'),
+            installPwaBtn: document.getElementById('install-pwa-btn'),
+            modeBadge: document.getElementById('mode-badge'),
+            heroTitle: document.getElementById('hero-title'),
+            heroSubtitle: document.getElementById('hero-subtitle'),
+            bookshelfSection: document.getElementById('bookshelf-section'),
+            bookshelfTitle: document.getElementById('bookshelf-title'),
+            bookshelfCount: document.getElementById('bookshelf-count'),
+            bookshelfGrid: document.getElementById('bookshelf-grid'),
+            dropZone: document.getElementById('drop-zone'),
+            fileInput: document.getElementById('pdf-file-input'),
+            uploadHeading: document.getElementById('upload-heading'),
+            selectFileBtn: document.getElementById('select-file-btn'),
+            selectBtnLabel: document.getElementById('select-btn-label'),
+            directionPill: document.getElementById('direction-pill'),
+            loadDemoBtn: document.getElementById('load-demo-btn'),
+            demoBtnLabel: document.getElementById('demo-btn-label'),
+            pwaModal: document.getElementById('pwa-modal'),
+            closePwaModalBtn: document.getElementById('close-pwa-modal-btn'),
+            confirmPwaModalBtn: document.getElementById('confirm-pwa-modal-btn'),
+            triggerNativeInstallBtn: document.getElementById('trigger-native-install-btn'),
+            readerScreen: document.getElementById('reader-screen'),
+            readerHeader: document.getElementById('reader-header'),
+            backHomeBtn: document.getElementById('back-home-btn'),
+            bookTitleDisplay: document.getElementById('book-title-display'),
+            toggleDirectionBtn: document.getElementById('toggle-direction-btn'),
+            directionBadgeText: document.getElementById('direction-badge-text'),
+            bookThemesGroup: document.getElementById('book-themes-group'),
+            mangaThemesGroup: document.getElementById('manga-themes-group'),
+            readerWarmSlider: document.getElementById('reader-warm-slider'),
+            toggleSpreadBtn: document.getElementById('toggle-spread-btn'),
+            iconSinglePage: document.getElementById('icon-single-page'),
+            iconDoublePage: document.getElementById('icon-double-page'),
+            spreadLabel: document.getElementById('spread-label'),
+            zoomOutBtn: document.getElementById('zoom-out-btn'),
+            zoomResetBtn: document.getElementById('zoom-reset-btn'),
+            zoomInBtn: document.getElementById('zoom-in-btn'),
+            fullscreenBtn: document.getElementById('fullscreen-btn'),
+            toggleHudBtn: document.getElementById('toggle-hud-btn'),
+            restoreHudBtn: document.getElementById('restore-hud-btn'),
+            readingStage: document.getElementById('reading-stage'),
+            clickZoneLeft: document.getElementById('click-zone-left'),
+            clickZoneRight: document.getElementById('click-zone-right'),
+            clickZoneCenter: document.getElementById('click-zone-center'),
+            leftZoneLabel: document.getElementById('left-zone-label'),
+            rightZoneLabel: document.getElementById('right-zone-label'),
+            bookWrapper: document.getElementById('book-wrapper'),
+            pdfPagesContainer: document.getElementById('pdf-pages-container'),
+            canvasLeft: document.getElementById('pdf-canvas-left'),
+            canvasRight: document.getElementById('pdf-canvas-right'),
+            spineOverlay: document.getElementById('spine-overlay'),
+            sampleBookContainer: document.getElementById('sample-book-container'),
+            pageLoader: document.getElementById('page-loader'),
+            readerFooter: document.getElementById('reader-footer'),
+            footerLeftBtn: document.getElementById('footer-left-btn'),
+            footerRightBtn: document.getElementById('footer-right-btn'),
+            pageSlider: document.getElementById('page-slider'),
+            pageNumberInput: document.getElementById('page-number-input'),
+            totalPagesDisplay: document.getElementById('total-pages-display'),
+            footerHintText: document.getElementById('footer-hint-text'),
+            progressPercentDisplay: document.getElementById('progress-percent-display')
+        };
+
+        const sampleContent = {
+            books: [
+                {
+                    tag: 'Capítulo I • Conforto Kindle',
+                    title: 'A Arte da Leitura Silenciosa',
+                    paragraphs: [
+                        'O papel quente absorve o reflexo duro das telas modernas, permitindo que seus olhos descansem mesmo durante horas de leitura noturna.',
+                        'Clique no lado direito da tela (ou pressione a seta →) para avançar para a próxima página, e no lado esquerdo para retornar.'
+                    ]
+                },
+                {
+                    tag: 'Capítulo II • Navegação Intuitiva',
+                    title: 'Luz Quente & Estante Offline',
+                    paragraphs: [
+                        'Você pode ajustar a intensidade da luz quente no controle deslizante superior para eliminar a luz azul antes de dormir.',
+                        'Quando abrir um PDF real, ele ficará salvo na sua estante local junto com a página exata onde você parou.'
+                    ]
+                },
+                {
+                    tag: 'Capítulo III • Modo Imersivo',
+                    title: 'Foco Total na História',
+                    paragraphs: [
+                        'Experimente alternar entre 1 página ou 2 páginas abertas lado a lado, ou ocultar as barras superiores para ler em tela cheia.',
+                        'Para começar a ler seus próprios arquivos, clique em "Trocar PDF" no canto superior esquerdo.'
+                    ]
+                }
+            ],
+            manga: [
+                {
+                    tag: 'Capítulo 01 • Leitura Japonesa (Dir → Esq)',
+                    title: 'O Despertar das Sombras',
+                    paragraphs: [
+                        'No modo Mangá, a leitura segue o sentido oriental original: clique no lado ESQUERDO da tela para avançar e no lado DIREITO para voltar.',
+                        'O tema escuro de alto contraste realça o traço nanquim e as cenas de ação sem cansar a visão no escuro.'
+                    ]
+                },
+                {
+                    tag: 'Capítulo 02 • Páginas Duplas',
+                    title: 'Quadros Panorâmicos',
+                    paragraphs: [
+                        'Ao ativar o modo de 2 páginas lado a lado, as páginas duplas de mangá se encaixam na ordem japonesa correta (página seguinte à esquerda).',
+                        'Experimente também o sub-tema "Contraste" na barra superior para deixar o preto ainda mais profundo.'
+                    ]
+                },
+                {
+                    tag: 'Capítulo 03 • Pronto para seus Volumes',
+                    title: 'Sua Coleção no Bolso',
+                    paragraphs: [
+                        'Clique em "Trocar PDF" no topo para anexar qualquer volume de mangá em PDF e continuar exatamente do capítulo onde parou.',
+                        'Você também pode alternar o sentido de leitura a qualquer momento clicando no botão "Mangá (←)" na barra superior.'
+                    ]
+                }
+            ]
+        };
+
+        let toastTimeout = null;
+        function showToast(msg) {
+            if (!els.toastContainer || !els.toastMessage) return;
+            els.toastMessage.textContent = msg;
+            els.toastContainer.classList.remove('opacity-0', '-translate-y-4');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                els.toastContainer.classList.add('opacity-0', '-translate-y-4');
+            }, 3000);
+        }
+
+        /**
+         * ARMAZENAMENTO SEGURO (LOCALSTORAGE FALLBACK PARA FILE:// OU MODO ANÔNIMO)
+         */
+        const memoryStorage = {};
+        function safeStorageGet(key) {
+            try {
+                return window.localStorage.getItem(key);
+            } catch (e) {
+                return Object.prototype.hasOwnProperty.call(memoryStorage, key) ? memoryStorage[key] : null;
+            }
+        }
+        function safeStorageSet(key, value) {
+            try {
+                window.localStorage.setItem(key, String(value));
+            } catch (e) {
+                memoryStorage[key] = String(value);
+            }
+        }
+        function safeStorageRemove(key) {
+            try {
+                window.localStorage.removeItem(key);
+            } catch (e) {
+                delete memoryStorage[key];
+            }
+        }
+
+        /**
+         * CONTROLE DE LUZ QUENTE (ESTILO KINDLE PAPERWHITE)
+         */
+        function setWarmLight(value) {
+            const val = Math.max(0, Math.min(60, parseInt(value, 10) || 0));
+            state.warmth = val;
+            if (els.welcomeWarmSlider) els.welcomeWarmSlider.value = val;
+            if (els.readerWarmSlider) els.readerWarmSlider.value = val;
+
+            // Aplica filtro âmbar quente suave proporcional ao slider
+            const alpha = (val / 100) * 0.65;
+            if (els.warmOverlay) {
+                els.warmOverlay.style.backgroundColor = `rgba(255, 162, 54, ${alpha.toFixed(3)})`;
+            }
+            safeStorageSet('fk_warm_light', val);
+        }
+
+        /**
+         * CONFIGURAÇÃO DE SUB-TEMA E SENTIDO DE LEITURA (OCIDENTAL / MANGÁ JAPONÊS)
+         */
+        function setSubtheme(sub) {
+            state.subtheme = sub;
+            document.body.setAttribute('data-subtheme', sub);
+            if (state.appMode === 'books') {
+                safeStorageSet('fk_book_subtheme', sub);
+            } else {
+                safeStorageSet('fk_manga_subtheme', sub);
+            }
+
+            document.querySelectorAll('.subtheme-btn').forEach(btn => {
+                if (btn.getAttribute('data-sub') === sub) {
+                    btn.classList.add('accent-bg', 'shadow-sm');
+                } else {
+                    btn.classList.remove('accent-bg', 'shadow-sm');
+                }
+            });
+
+            if (state.viewType === 'sample') {
+                renderSamplePages();
+            }
+        }
+
+        function setReadingDirection(isRtl, shouldRender = true) {
+            state.isRtl = Boolean(isRtl);
+            if (els.directionBadgeText) {
+                els.directionBadgeText.textContent = state.isRtl ? 'Mangá (←)' : 'Livro (→)';
+            }
+            if (els.leftZoneLabel && els.rightZoneLabel) {
+                els.leftZoneLabel.textContent = state.isRtl ? 'Avançar' : 'Voltar';
+                els.rightZoneLabel.textContent = state.isRtl ? 'Voltar' : 'Avançar';
+            }
+            if (els.footerHintText) {
+                els.footerHintText.textContent = state.isRtl
+                    ? 'Clique na esquerda para avançar (Mangá) • Setas ← →'
+                    : 'Clique na direita para avançar • Setas ← →';
+            }
+            updateNavigationUI();
+            if (shouldRender && state.viewType !== 'welcome') {
+                renderCurrentView();
+            }
+        }
+
+        /**
+         * CONFIGURAÇÃO DE WEBAPP (PWA MANIFEST DINÂMICO & ÍCONES)
+         */
+        let deferredInstallPrompt = null;
+
+        function setupPwaManifest() {
+            try {
+                // Em file:// navegadores bloqueiam manifest/service worker
+                if (window.location.protocol === 'file:') return;
+
+                const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                    <rect width="512" height="512" rx="112" fill="#B45309"/>
+                    <path d="M256 144c-26-18-62-28-100-28-38 0-74 10-100 28v244c26-18 62-28 100-28 38 0 74 10 100 28 26-18 62-28 100-28 38 0 74 10 100 28V144c-26-18-62-28-100-28-38 0-74 10-100 28z" fill="none" stroke="#FFFFFF" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="256" y1="144" x2="256" y2="388" stroke="#FFFFFF" stroke-width="28" stroke-linecap="round"/>
+                </svg>`;
+
+                const iconDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgIcon);
+                const appleIconLink = document.getElementById('apple-touch-icon-link');
+                if (appleIconLink) appleIconLink.href = iconDataUrl;
+
+                const manifestObj = {
+                    name: 'Folio & Koma — Leitor de Livros e Mangás',
+                    short_name: 'Folio & Koma',
+                    description: 'Leitor universal offline de PDFs de livros e mangás com estante salva e filtro Kindle.',
+                    start_url: window.location.href,
+                    display: 'standalone',
+                    orientation: 'any',
+                    background_color: '#F6F1E7',
+                    theme_color: '#B45309',
+                    icons: [
+                        { src: iconDataUrl, sizes: '192x192', type: 'image/svg+xml', purpose: 'any maskable' },
+                        { src: iconDataUrl, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
+                    ]
+                };
+
+                const blob = new Blob([JSON.stringify(manifestObj)], { type: 'application/manifest+json' });
+                const manifestUrl = URL.createObjectURL(blob);
+                const manifestLink = document.getElementById('pwa-manifest-link');
+                if (manifestLink) manifestLink.href = manifestUrl;
+            } catch (e) {
+                console.warn('Manifest dinâmico ignorado:', e);
+            }
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredInstallPrompt = e;
+            if (els.triggerNativeInstallBtn) {
+                els.triggerNativeInstallBtn.classList.remove('hidden');
+            }
+        });
+
+        /**
+         * BANCO DE DADOS LOCAL (INDEXEDDB) COM PROTEÇÃO CONTRA ORIGEM NULA (FILE://)
+         */
+        const DB_NAME = 'FolioKomaLibraryDB';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'documents';
+        let isIndexedDbAvailable = true;
+        let hasNotifiedLocalRestriction = false;
+
+        function notifyLocalFileNotice() {
+            if (hasNotifiedLocalRestriction) return;
+            hasNotifiedLocalRestriction = true;
+            const container = els.bookshelfSection;
+            if (!container) return;
+            const existingBanner = document.getElementById('local-file-notice');
+            if (existingBanner) return;
+
+            const banner = document.createElement('div');
+            banner.id = 'local-file-notice';
+            banner.className = 'w-full surface-panel border rounded-2xl px-4 py-3 text-xs flex items-start sm:items-center gap-2.5 opacity-85';
+            banner.innerHTML = `
+                <svg class="w-4 h-4 accent-text shrink-0 mt-0.5 sm:mt-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span><strong>Modo Arquivo Local:</strong> Você pode abrir e ler qualquer PDF normalmente agora. O salvamento permanente na estante e a instalação como App na tela inicial são ativados automaticamente ao abrir via link web (http/https).</span>
+            `;
+            container.parentNode.insertBefore(banner, container);
+        }
+
+        function openLibraryDB() {
+            return new Promise((resolve, reject) => {
+                try {
+                    if (!window.indexedDB) {
+                        isIndexedDbAvailable = false;
+                        reject(new Error('IndexedDB indisponível'));
+                        return;
+                    }
+                    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(STORE_NAME)) {
+                            const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                            store.createIndex('mode', 'mode', { unique: false });
+                            store.createIndex('updatedAt', 'updatedAt', { unique: false });
+                        }
+                    };
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => {
+                        isIndexedDbAvailable = false;
+                        reject(request.error);
+                    };
+                } catch (err) {
+                    isIndexedDbAvailable = false;
+                    reject(err);
+                }
+            });
+        }
+
+        async function saveDocumentToDB(record) {
+            try {
+                const db = await openLibraryDB();
+                return await new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    store.put(record);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (err) {
+                isIndexedDbAvailable = false;
+                if (window.location.protocol === 'file:') notifyLocalFileNotice();
+                return false;
+            }
+        }
+
+        async function getDocumentFromDB(id) {
+            try {
+                const db = await openLibraryDB();
+                return await new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readonly');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.get(id);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => reject(req.error);
+                });
+            } catch (err) {
+                isIndexedDbAvailable = false;
+                return null;
+            }
+        }
+
+        async function getAllDocumentsByMode(mode) {
+            try {
+                const db = await openLibraryDB();
+                return await new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readonly');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.getAll();
+                    req.onsuccess = () => {
+                        const items = (req.result || [])
+                            .filter(item => item.mode === mode)
+                            .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                        resolve(items);
+                    };
+                    req.onerror = () => reject(req.error);
+                });
+            } catch (err) {
+                isIndexedDbAvailable = false;
+                if (window.location.protocol === 'file:') notifyLocalFileNotice();
+                return [];
+            }
+        }
+
+        async function deleteDocumentFromDB(id) {
+            try {
+                const db = await openLibraryDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    store.delete(id);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (err) {
+                return false;
+            }
+        }
+
+        async function generatePdfCoverThumbnail(pdf) {
+            try {
+                const page = await pdf.getPage(1);
+                const unscaled = page.getViewport({ scale: 1 });
+                const targetWidth = 180;
+                const scale = targetWidth / unscaled.width;
+                const viewport = page.getViewport({ scale });
+
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = Math.floor(viewport.width);
+                tempCanvas.height = Math.floor(viewport.height);
+                const ctx = tempCanvas.getContext('2d');
+
+                await page.render({ canvasContext: ctx, viewport }).promise;
+                return tempCanvas.toDataURL('image/jpeg', 0.75);
+            } catch (e) {
+                return '';
+            }
+        }
+
+        /**
+         * RENDERIZA A ESTANTE DE LIVROS OU MANGÁS SALVOS NO DISPOSITIVO
+         */
+        async function renderBookshelf() {
+            const items = await getAllDocumentsByMode(state.appMode);
+            els.bookshelfTitle.textContent = state.appMode === 'books'
+                ? 'Continuar Lendo • Estante de Livros'
+                : 'Continuar Lendo • Estante de Mangás';
+            els.bookshelfCount.textContent = `${items.length} ${items.length === 1 ? 'salvo' : 'salvos'}`;
+
+            if (items.length === 0) {
+                els.bookshelfSection.classList.add('hidden');
+                els.bookshelfGrid.innerHTML = '';
+                return;
+            }
+
+            els.bookshelfSection.classList.remove('hidden');
+            els.bookshelfGrid.innerHTML = items.map(item => {
+                const pct = item.totalPages > 0 ? Math.min(100, Math.round((item.currentPage / item.totalPages) * 100)) : 0;
+                const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '';
+                const cleanTitle = (item.fileName || 'Documento').replace(/\.pdf$/i, '');
+
+                return `
+                    <div class="surface-panel border rounded-2xl p-3 flex gap-3 items-center group hover:shadow-md transition-all relative">
+                        <button type="button" onclick="openSavedDocument('${item.id}')" class="flex gap-3 items-center flex-1 min-w-0 text-left">
+                            <div class="w-14 h-20 rounded-xl overflow-hidden bg-black/10 dark:bg-white/10 shrink-0 border border-current/10 flex items-center justify-center shadow-sm">
+                                ${item.coverDataUrl
+                                    ? `<img src="${item.coverDataUrl}" alt="Capa" class="w-full h-full object-cover">`
+                                    : `<svg class="w-6 h-6 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>`
+                                }
+                            </div>
+                            <div class="flex-1 min-w-0 space-y-1.5">
+                                <h3 class="text-xs sm:text-sm font-bold truncate group-hover:underline" title="${cleanTitle}">${cleanTitle}</h3>
+                                <div class="flex items-center justify-between text-[11px] opacity-75">
+                                    <span>Pág. <strong class="accent-text">${item.currentPage}</strong> / ${item.totalPages}</span>
+                                    <span>${pct}% • ${dateStr}</span>
+                                </div>
+                                <div class="w-full h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                                    <div class="h-full accent-bg rounded-full transition-all" style="width: ${pct}%"></div>
+                                </div>
+                            </div>
+                        </button>
+                        <button type="button" onclick="removeSavedDocument(event, '${item.id}')" title="Remover da estante" class="p-1.5 rounded-lg opacity-45 hover:opacity-100 hover:bg-red-500/15 hover:text-red-500 transition-all shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function openSavedDocument(id) {
+            const record = await getDocumentFromDB(id);
+            if (!record || !record.pdfData) {
+                showToast('Arquivo não encontrado na estante local.');
+                return;
+            }
+
+            try {
+                showToast('Abrindo da sua estante salva...');
+                const pdf = await pdfjsLib.getDocument({ data: record.pdfData.slice(0) }).promise;
+
+                state.viewType = 'pdf';
+                state.pdfDoc = pdf;
+                state.fileId = record.id;
+                state.fileName = record.fileName;
+                state.totalPages = pdf.numPages;
+                state.currentPage = Math.min(Math.max(1, record.currentPage || 1), state.totalPages);
+
+                els.bookTitleDisplay.textContent = record.fileName.replace(/\.pdf$/i, '');
+                enterReaderScreen();
+                showToast(`Retomando da página ${state.currentPage} de ${state.totalPages}`);
+                await renderCurrentView();
+            } catch (err) {
+                console.error(err);
+                showToast('Erro ao abrir o arquivo salvo.');
+            }
+        }
+
+        async function removeSavedDocument(event, id) {
+            event.stopPropagation();
+            await deleteDocumentFromDB(id);
+            safeStorageRemove(`fk_prog_${id}`);
+            showToast('Removido da sua estante.');
+            await renderBookshelf();
+        }
+
+        /**
+         * ALTERNÂNCIA ENTRE ABA 'LIVROS' E ABA 'MANGÁS'
+         */
+        function switchAppMode(mode) {
+            state.appMode = mode;
+            document.body.setAttribute('data-mode', mode);
+            safeStorageSet('fk_app_mode', mode);
+
+            const metaTheme = document.getElementById('meta-theme-color');
+            if (metaTheme) {
+                metaTheme.setAttribute('content', mode === 'books' ? '#F6F1E7' : '#09090B');
+            }
+
+            if (mode === 'books') {
+                // Estiliza abas
+                els.tabBooksBtn.classList.add('accent-bg', 'shadow-sm');
+                els.tabBooksBtn.classList.remove('opacity-75');
+                els.tabMangaBtn.classList.remove('accent-bg', 'shadow-sm');
+                els.tabMangaBtn.classList.add('opacity-75');
+                els.mangaBgEffect.classList.add('hidden');
+
+                // Textos acolhedores de Livros
+                els.modeBadge.innerHTML = '<span>Conforto Estilo Kindle • Leitura Ocidental</span>';
+                els.heroTitle.className = 'font-serif text-3xl sm:text-5xl font-bold tracking-tight';
+                els.heroTitle.textContent = 'Leia seus livros com o conforto do papel.';
+                els.heroSubtitle.textContent = 'Anexe qualquer romance, apostila ou documento PDF. O arquivo fica salvo na estante do seu aparelho junto com a página onde você parou.';
+                els.uploadHeading.textContent = 'Adicionar novo livro PDF à estante';
+                els.selectBtnLabel.textContent = 'Anexar Livro PDF';
+                els.directionPill.textContent = 'Avança pela Direita →';
+                els.demoBtnLabel.textContent = 'Testar Leitor com Amostra de Livro';
+
+                // Grupos de temas no leitor
+                els.bookThemesGroup.classList.remove('hidden');
+                els.mangaThemesGroup.classList.add('hidden');
+
+                setSubtheme(safeStorageGet('fk_book_subtheme') || 'paper');
+                setReadingDirection(false, false);
+            } else {
+                // Estiliza abas
+                els.tabMangaBtn.classList.add('accent-bg', 'shadow-sm');
+                els.tabMangaBtn.classList.remove('opacity-75');
+                els.tabBooksBtn.classList.remove('accent-bg', 'shadow-sm');
+                els.tabBooksBtn.classList.add('opacity-75');
+                els.mangaBgEffect.classList.remove('hidden');
+
+                // Textos e estética Dark Shonen / Portal
+                els.modeBadge.innerHTML = '<span>Modo Mangá &amp; HQ • Leitura Japonesa (Dir → Esq)</span>';
+                els.heroTitle.className = 'font-manga text-3xl sm:text-5xl font-bold tracking-tight';
+                els.heroTitle.textContent = 'Mergulhe nos seus mangás favoritos.';
+                els.heroSubtitle.textContent = 'Ambiente escuro de alto contraste pensado para leitura noturna. Salve seus volumes no aparelho e avance clicando à esquerda no sentido oriental.';
+                els.uploadHeading.textContent = 'Adicionar novo mangá PDF à estante';
+                els.selectBtnLabel.textContent = 'Anexar Mangá PDF';
+                els.directionPill.textContent = '← Avança pela Esquerda';
+                els.demoBtnLabel.textContent = 'Testar Leitor com Amostra de Mangá';
+
+                // Grupos de temas no leitor
+                els.bookThemesGroup.classList.add('hidden');
+                els.mangaThemesGroup.classList.remove('hidden');
+
+                setSubtheme(safeStorageGet('fk_manga_subtheme') || 'original');
+                setReadingDirection(true, false);
+            }
+
+            renderBookshelf();
+        }
+
+        /**
+         * SALVAMENTO AUTOMÁTICO DO PROGRESSO (INDEXEDDB + LOCALSTORAGE)
+         */
+        async function saveProgress() {
+            if (!state.fileId || state.viewType !== 'pdf') return;
+            try {
+                const payload = {
+                    fileId: state.fileId,
+                    fileName: state.fileName,
+                    page: state.currentPage,
+                    mode: state.appMode,
+                    updatedAt: Date.now()
+                };
+                safeStorageSet(`fk_prog_${state.fileId}`, JSON.stringify(payload));
+
+                const existing = await getDocumentFromDB(state.fileId);
+                if (existing) {
+                    existing.currentPage = state.currentPage;
+                    existing.totalPages = state.totalPages;
+                    existing.updatedAt = Date.now();
+                    await saveDocumentToDB(existing);
+                }
+            } catch (e) {
+                console.warn('Não foi possível salvar progresso:', e);
+            }
+        }
+
+        function getSavedPage(fileId) {
+            try {
+                const raw = safeStorageGet(`fk_prog_${fileId}`);
+                if (!raw) return 1;
+                const parsed = JSON.parse(raw);
+                return parsed.page && parsed.page >= 1 ? parsed.page : 1;
+            } catch (e) {
+                return 1;
+            }
+        }
+
+        /**
+         * CARREGAMENTO RESILIENTE DO PDF.JS (FALLBACK AUTOMÁTICO EM FILE://)
+         */
+        async function openPdfDocumentResilient(arrayBuffer) {
+            try {
+                return await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+            } catch (workerErr) {
+                console.warn('Worker externo bloqueado em file://, ativando modo sem worker:', workerErr);
+                pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+                return await pdfjsLib.getDocument({ data: arrayBuffer.slice(0), disableWorker: true }).promise;
+            }
+        }
+
+        /**
+         * CARREGAR ARQUIVO PDF DO USUÁRIO E SALVAR NA ESTANTE (INDEXEDDB)
+         */
+        async function loadPdfFile(file) {
+            if (!file || (file.type && file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf'))) {
+                showToast('Por favor, selecione um arquivo PDF válido.');
+                return;
+            }
+
+            try {
+                showToast('Abrindo PDF...');
+                const buffer = await file.arrayBuffer();
+                const bufferCopy = buffer.slice(0);
+                const pdf = await openPdfDocumentResilient(buffer);
+
+                const fileId = `${state.appMode}_${file.name}_${file.size}`;
+                const existing = await getDocumentFromDB(fileId);
+                const savedPage = existing ? existing.currentPage : getSavedPage(fileId);
+
+                state.viewType = 'pdf';
+                state.pdfDoc = pdf;
+                state.fileName = file.name;
+                state.fileId = fileId;
+                state.totalPages = pdf.numPages;
+                state.currentPage = Math.min(Math.max(1, savedPage || 1), state.totalPages);
+
+                // Gera miniatura da capa e salva o PDF completo no IndexedDB (quando suportado)
+                const coverDataUrl = existing && existing.coverDataUrl
+                    ? existing.coverDataUrl
+                    : await generatePdfCoverThumbnail(pdf);
+
+                const savedInDb = await saveDocumentToDB({
+                    id: fileId,
+                    fileName: file.name,
+                    mode: state.appMode,
+                    currentPage: state.currentPage,
+                    totalPages: state.totalPages,
+                    coverDataUrl,
+                    pdfData: bufferCopy,
+                    updatedAt: Date.now()
+                });
+
+                els.bookTitleDisplay.textContent = file.name.replace(/\.pdf$/i, '');
+                enterReaderScreen();
+
+                if (state.currentPage > 1) {
+                    showToast(`Retomando da página ${state.currentPage} de ${state.totalPages}`);
+                } else if (savedInDb) {
+                    showToast(`Salvo na estante (${state.totalPages} páginas)`);
+                } else {
+                    showToast(`PDF aberto em memória (${state.totalPages} páginas)`);
+                }
+
+                await renderCurrentView();
+            } catch (err) {
+                console.error(err);
+                showToast('Não foi possível abrir este PDF. Verifique se não está corrompido.');
+            }
+        }
+
+        /**
+         * CARREGAR AMOSTRA INTERATIVA
+         */
+        function loadDemoSample() {
+            state.viewType = 'sample';
+            state.pdfDoc = null;
+            state.fileId = `demo_${state.appMode}`;
+            state.fileName = state.appMode === 'books' ? 'Amostra de Livro' : 'Amostra de Mangá';
+            state.totalPages = sampleContent[state.appMode].length;
+            state.currentPage = 1;
+
+            els.bookTitleDisplay.textContent = state.fileName;
+            enterReaderScreen();
+            renderCurrentView();
+            showToast(state.isRtl ? 'Modo Mangá: clique na esquerda para avançar' : 'Modo Livro: clique na direita para avançar');
+        }
+
+        function enterReaderScreen() {
+            els.welcomeScreen.classList.add('hidden');
+            els.readerScreen.classList.remove('hidden');
+
+            if (window.innerWidth >= 1024 && !safeStorageGet('fk_spread_pref')) {
+                setSpreadMode(true, false);
+            } else {
+                updateSpreadUI();
+            }
+        }
+
+        function exitReaderScreen() {
+            els.readerScreen.classList.add('hidden');
+            els.welcomeScreen.classList.remove('hidden');
+            renderBookshelf();
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+        }
+
+        /**
+         * RENDERIZAÇÃO DE PÁGINA PDF EM ALTA NITIDEZ (RETINA / HIDPI)
+         */
+        async function renderPdfPageToCanvas(pageNum, canvas) {
+            const page = await state.pdfDoc.getPage(pageNum);
+            const unscaled = page.getViewport({ scale: 1 });
+
+            const stageW = els.readingStage.clientWidth - (window.innerWidth < 640 ? 24 : 64);
+            const stageH = els.readingStage.clientHeight - (window.innerWidth < 640 ? 24 : 48);
+
+            const availW = state.isDoublePage ? (stageW / 2) - 4 : stageW;
+            const availH = stageH;
+
+            const scale = Math.min(availW / unscaled.width, availH / unscaled.height) * state.zoomMultiplier;
+            const viewport = page.getViewport({ scale });
+            const dpr = window.devicePixelRatio || 1;
+
+            canvas.width = Math.floor(viewport.width * dpr);
+            canvas.height = Math.floor(viewport.height * dpr);
+            canvas.style.width = `${Math.floor(viewport.width)}px`;
+            canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            await page.render({ canvasContext: ctx, viewport }).promise;
+        }
+
+        /**
+         * RENDERIZAÇÃO DA AMOSTRA INTERATIVA
+         */
+        function renderSamplePages() {
+            els.pdfPagesContainer.classList.add('hidden');
+            els.sampleBookContainer.classList.remove('hidden');
+
+            const isDark = state.appMode === 'manga' || state.subtheme === 'night';
+            const isSepia = state.appMode === 'books' && state.subtheme === 'sepia';
+            const cardStyle = isDark
+                ? 'bg-[#141418] text-[#F4F4F5]'
+                : (isSepia ? 'bg-[#F5EBD6] text-[#3B2E1E]' : 'bg-[#FFFDF9] text-[#2C2621]');
+
+            const list = sampleContent[state.appMode];
+            const buildPage = (num) => {
+                const item = list[num - 1];
+                if (!item) return `<div class="flex-1 p-10 ${cardStyle} flex items-center justify-center opacity-40 italic">Fim da amostra</div>`;
+
+                return `
+                    <div class="flex-1 p-7 sm:p-12 ${cardStyle} flex flex-col justify-between min-h-[65vh] sm:min-h-[72vh]" style="font-size: ${state.zoomMultiplier}rem;">
+                        <div class="space-y-6">
+                            <div class="border-b border-current/10 pb-4 space-y-1.5">
+                                <p class="text-[11px] uppercase tracking-[0.2em] font-bold accent-text">${item.tag}</p>
+                                <h2 class="${state.appMode === 'manga' ? 'font-manga' : 'font-serif'} text-2xl sm:text-3xl font-bold">${item.title}</h2>
+                            </div>
+                            <div class="${state.appMode === 'manga' ? 'font-sans' : 'font-serif'} text-base sm:text-lg leading-relaxed space-y-4">
+                                ${item.paragraphs.map(p => `<p>${p}</p>`).join('')}
+                            </div>
+                        </div>
+                        <div class="pt-6 text-center text-xs font-semibold opacity-50">
+                            Página ${num} de ${state.totalPages}
+                        </div>
+                    </div>
+                `;
+            };
+
+            if (state.isDoublePage && window.innerWidth >= 768) {
+                const p1 = state.currentPage;
+                const p2 = state.currentPage + 1 <= state.totalPages ? state.currentPage + 1 : null;
+                // No modo Mangá (RTL), a página seguinte fica à esquerda e a atual à direita!
+                const leftNum = state.isRtl ? p2 : p1;
+                const rightNum = state.isRtl ? p1 : p2;
+
+                els.sampleBookContainer.innerHTML = `
+                    <div class="grid grid-cols-2 relative divide-x divide-black/10 dark:divide-white/10">
+                        ${buildPage(leftNum)}
+                        ${buildPage(rightNum)}
+                        <div class="book-spine-shadow absolute inset-y-0 left-1/2 -translate-x-1/2 w-12 pointer-events-none"></div>
+                    </div>
+                `;
+            } else {
+                els.sampleBookContainer.innerHTML = buildPage(state.currentPage);
+            }
+        }
+
+        /**
+         * ORQUESTRADOR CENTRAL DE RENDERIZAÇÃO
+         */
+        async function renderCurrentView() {
+            updateNavigationUI();
+            saveProgress();
+
+            els.bookWrapper.classList.remove('page-animate');
+            void els.bookWrapper.offsetWidth;
+            els.bookWrapper.classList.add('page-animate');
+
+            if (state.viewType === 'sample') {
+                renderSamplePages();
+                return;
+            }
+
+            if (!state.pdfDoc) return;
+
+            if (state.isRendering) {
+                state.pendingPage = state.currentPage;
+                return;
+            }
+
+            state.isRendering = true;
+            els.pageLoader.classList.remove('hidden');
+            els.sampleBookContainer.classList.add('hidden');
+            els.pdfPagesContainer.classList.remove('hidden');
+
+            try {
+                const hasSecondPage = state.isDoublePage && (state.currentPage + 1 <= state.totalPages);
+
+                if (hasSecondPage) {
+                    els.canvasRight.classList.remove('hidden');
+                    els.spineOverlay.classList.remove('hidden');
+
+                    // Se leitura japonesa (Mangá), página N+1 vai na esquerda e página N vai na direita
+                    const leftPageNum = state.isRtl ? state.currentPage + 1 : state.currentPage;
+                    const rightPageNum = state.isRtl ? state.currentPage : state.currentPage + 1;
+
+                    await renderPdfPageToCanvas(leftPageNum, els.canvasLeft);
+                    await renderPdfPageToCanvas(rightPageNum, els.canvasRight);
+                } else {
+                    els.canvasRight.classList.add('hidden');
+                    els.spineOverlay.classList.add('hidden');
+                    await renderPdfPageToCanvas(state.currentPage, els.canvasLeft);
+                }
+            } catch (err) {
+                console.error('Erro ao renderizar página:', err);
+            } finally {
+                state.isRendering = false;
+                els.pageLoader.classList.add('hidden');
+
+                if (state.pendingPage !== null && state.pendingPage !== state.currentPage) {
+                    const nextTarget = state.pendingPage;
+                    state.pendingPage = null;
+                    state.currentPage = nextTarget;
+                    renderCurrentView();
+                } else {
+                    state.pendingPage = null;
+                }
+            }
+        }
+
+        /**
+         * ATUALIZA BARRA DE PROGRESSO E BOTÕES
+         */
+        function updateNavigationUI() {
+            els.pageSlider.max = state.totalPages;
+            els.pageSlider.value = state.currentPage;
+            els.pageNumberInput.max = state.totalPages;
+            els.pageNumberInput.value = state.currentPage;
+            els.totalPagesDisplay.textContent = state.totalPages;
+
+            const reachedPage = state.isDoublePage
+                ? Math.min(state.currentPage + 1, state.totalPages)
+                : state.currentPage;
+            const percent = Math.round((reachedPage / state.totalPages) * 100);
+            els.progressPercentDisplay.textContent = `${percent}%`;
+
+            const atStart = state.currentPage <= 1;
+            const atEnd = reachedPage >= state.totalPages;
+
+            els.footerLeftBtn.disabled = state.isRtl ? atEnd : atStart;
+            els.footerRightBtn.disabled = state.isRtl ? atStart : atEnd;
+        }
+
+        /**
+         * AVANÇAR E VOLTAR PÁGINAS
+         */
+        function nextPage() {
+            const step = state.isDoublePage ? 2 : 1;
+            if (state.currentPage + step <= state.totalPages) {
+                state.currentPage += step;
+                renderCurrentView();
+            } else if (state.isDoublePage && state.currentPage + 1 === state.totalPages) {
+                state.currentPage = state.totalPages;
+                renderCurrentView();
+            } else {
+                showToast('Você chegou à última página.');
+            }
+        }
+
+        function prevPage() {
+            const step = state.isDoublePage ? 2 : 1;
+            if (state.currentPage - step >= 1) {
+                state.currentPage -= step;
+                renderCurrentView();
+            } else if (state.currentPage > 1) {
+                state.currentPage = 1;
+                renderCurrentView();
+            } else {
+                showToast('Você está na primeira página.');
+            }
+        }
+
+        function goToPage(num) {
+            let target = parseInt(num, 10);
+            if (isNaN(target)) return;
+            target = Math.max(1, Math.min(state.totalPages, target));
+            if (state.isDoublePage && target > 1 && target % 2 === 0) {
+                target -= 1;
+            }
+            state.currentPage = target;
+            renderCurrentView();
+        }
+
+        /**
+         * MODO 1 PÁGINA VS. 2 PÁGINAS
+         */
+        function setSpreadMode(isDouble, shouldRender = true) {
+            state.isDoublePage = isDouble;
+            safeStorageSet('fk_spread_pref', isDouble ? 'double' : 'single');
+            if (isDouble && state.currentPage > 1 && state.currentPage % 2 === 0) {
+                state.currentPage -= 1;
+            }
+            updateSpreadUI();
+            if (shouldRender && state.viewType !== 'welcome') {
+                renderCurrentView();
+            }
+        }
+
+        function updateSpreadUI() {
+            if (state.isDoublePage) {
+                els.iconSinglePage.classList.add('hidden');
+                els.iconDoublePage.classList.remove('hidden');
+                els.spreadLabel.textContent = '2 Págs.';
+            } else {
+                els.iconSinglePage.classList.remove('hidden');
+                els.iconDoublePage.classList.add('hidden');
+                els.spreadLabel.textContent = '1 Pág.';
+            }
+        }
+
+        /**
+         * ZOOM E AJUSTAR À TELA
+         */
+        function setZoom(newZoom) {
+            const clamped = Math.max(0.6, Math.min(2.2, Math.round(newZoom * 100) / 100));
+            state.zoomMultiplier = clamped;
+            els.zoomResetBtn.textContent = `${Math.round(clamped * 100)}%`;
+            if (state.viewType !== 'welcome') renderCurrentView();
+        }
+
+        /**
+         * MODO FOCO TOTAL (OCULTAR/MOSTRAR BARRAS)
+         */
+        function toggleHud(force) {
+            state.hudVisible = typeof force === 'boolean' ? force : !state.hudVisible;
+            if (state.hudVisible) {
+                els.readerHeader.classList.remove('hidden');
+                els.readerFooter.classList.remove('hidden');
+                els.restoreHudBtn.classList.add('hidden');
+            } else {
+                els.readerHeader.classList.add('hidden');
+                els.readerFooter.classList.add('hidden');
+                els.restoreHudBtn.classList.remove('hidden');
+            }
+            if (state.viewType === 'pdf') {
+                setTimeout(() => renderCurrentView(), 50);
+            }
+        }
+
+        /**
+         * CONFIGURAÇÃO DE EVENTOS
+         */
+        function initEvents() {
+            // Abas principais: Livros vs. Mangás
+            els.tabBooksBtn.addEventListener('click', () => switchAppMode('books'));
+            els.tabMangaBtn.addEventListener('click', () => switchAppMode('manga'));
+
+            // Sliders sincronizados de Luz Quente Kindle
+            els.welcomeWarmSlider.addEventListener('input', (e) => setWarmLight(e.target.value));
+            els.readerWarmSlider.addEventListener('input', (e) => setWarmLight(e.target.value));
+
+            // Modal e Prompt de Instalação PWA (WebApp na Tela Inicial)
+            els.installPwaBtn.addEventListener('click', () => {
+                els.pwaModal.classList.remove('hidden');
+            });
+            els.closePwaModalBtn.addEventListener('click', () => {
+                els.pwaModal.classList.add('hidden');
+            });
+            els.confirmPwaModalBtn.addEventListener('click', () => {
+                els.pwaModal.classList.add('hidden');
+            });
+            els.pwaModal.addEventListener('click', (e) => {
+                if (e.target === els.pwaModal) els.pwaModal.classList.add('hidden');
+            });
+            els.triggerNativeInstallBtn.addEventListener('click', async () => {
+                if (!deferredInstallPrompt) return;
+                deferredInstallPrompt.prompt();
+                const { outcome } = await deferredInstallPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    showToast('Folio & Koma adicionado à tela inicial!');
+                }
+                deferredInstallPrompt = null;
+                els.triggerNativeInstallBtn.classList.add('hidden');
+                els.pwaModal.classList.add('hidden');
+            });
+
+            // Upload de PDF e Drag & Drop
+            els.selectFileBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                els.fileInput.click();
+            });
+            els.dropZone.addEventListener('click', () => els.fileInput.click());
+            els.fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) loadPdfFile(e.target.files[0]);
+            });
+
+            els.dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                els.dropZone.classList.add('scale-[1.01]', 'shadow-xl');
+            });
+            els.dropZone.addEventListener('dragleave', () => {
+                els.dropZone.classList.remove('scale-[1.01]', 'shadow-xl');
+            });
+            els.dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                els.dropZone.classList.remove('scale-[1.01]', 'shadow-xl');
+                if (e.dataTransfer.files.length > 0) loadPdfFile(e.dataTransfer.files[0]);
+            });
+
+            // Botão Amostra e Voltar
+            els.loadDemoBtn.addEventListener('click', loadDemoSample);
+            els.backHomeBtn.addEventListener('click', exitReaderScreen);
+
+            // Alternar sentido de leitura no leitor (Ocidental vs. Mangá Japonês)
+            els.toggleDirectionBtn.addEventListener('click', () => {
+                setReadingDirection(!state.isRtl, true);
+                showToast(state.isRtl ? 'Sentido Mangá: clique à esquerda para avançar' : 'Sentido Livro: clique à direita para avançar');
+            });
+
+            // Cliques nas laterais da tela (respeita sentido Livro ou Mangá!)
+            els.clickZoneLeft.addEventListener('click', () => {
+                state.isRtl ? nextPage() : prevPage();
+            });
+            els.clickZoneRight.addEventListener('click', () => {
+                state.isRtl ? prevPage() : nextPage();
+            });
+            els.clickZoneCenter.addEventListener('click', () => {
+                if (window.innerWidth < 768) toggleHud();
+            });
+
+            // Botões e controles do rodapé
+            els.footerLeftBtn.addEventListener('click', () => {
+                state.isRtl ? nextPage() : prevPage();
+            });
+            els.footerRightBtn.addEventListener('click', () => {
+                state.isRtl ? prevPage() : nextPage();
+            });
+            els.pageSlider.addEventListener('input', (e) => {
+                els.pageNumberInput.value = e.target.value;
+            });
+            els.pageSlider.addEventListener('change', (e) => goToPage(e.target.value));
+            els.pageNumberInput.addEventListener('change', (e) => goToPage(e.target.value));
+            els.pageNumberInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') goToPage(e.target.value);
+            });
+
+            // Spread, Zoom, Tela Cheia e HUD
+            els.toggleSpreadBtn.addEventListener('click', () => setSpreadMode(!state.isDoublePage));
+            els.zoomInBtn.addEventListener('click', () => setZoom(state.zoomMultiplier + 0.15));
+            els.zoomOutBtn.addEventListener('click', () => setZoom(state.zoomMultiplier - 0.15));
+            els.zoomResetBtn.addEventListener('click', () => setZoom(1.0));
+
+            els.fullscreenBtn.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => showToast('Tela cheia indisponível.'));
+                } else {
+                    document.exitFullscreen().catch(() => {});
+                }
+            });
+
+            els.toggleHudBtn.addEventListener('click', () => toggleHud(false));
+            els.restoreHudBtn.addEventListener('click', () => toggleHud(true));
+
+            // Atalhos de Teclado (Setas respeitam sentido Livro ou Mangá!)
+            window.addEventListener('keydown', (e) => {
+                if (state.viewType === 'welcome') return;
+                if (document.activeElement === els.pageNumberInput) return;
+
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    state.isRtl ? prevPage() : nextPage();
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    state.isRtl ? nextPage() : prevPage();
+                } else if (e.key === ' ') {
+                    e.preventDefault();
+                    nextPage();
+                } else if (e.key === 'Escape' && !state.hudVisible) {
+                    toggleHud(true);
+                }
+            });
+
+            // Gestos Touch / Swipe em celulares e tablets
+            let touchStartX = 0;
+            let touchStartY = 0;
+            els.readingStage.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+                touchStartY = e.changedTouches[0].screenY;
+            }, { passive: true });
+
+            els.readingStage.addEventListener('touchend', (e) => {
+                const dx = e.changedTouches[0].screenX - touchStartX;
+                const dy = e.changedTouches[0].screenY - touchStartY;
+                if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+                    if (dx < 0) {
+                        // Deslizou para a esquerda
+                        state.isRtl ? prevPage() : nextPage();
+                    } else {
+                        // Deslizou para a direita
+                        state.isRtl ? nextPage() : prevPage();
+                    }
+                }
+            }, { passive: true });
+
+            // Responsividade ao redimensionar
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    if (state.viewType !== 'welcome') renderCurrentView();
+                }, 200);
+            });
+        }
+
+        // Inicialização
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                setupPwaManifest();
+            } catch (e) {}
+
+            try {
+                const savedWarmth = safeStorageGet('fk_warm_light');
+                setWarmLight(savedWarmth !== null ? savedWarmth : 15);
+
+                const savedSpread = safeStorageGet('fk_spread_pref');
+                if (savedSpread === 'double') {
+                    state.isDoublePage = true;
+                    updateSpreadUI();
+                }
+
+                const savedMode = safeStorageGet('fk_app_mode') || 'books';
+                switchAppMode(savedMode);
+            } catch (err) {
+                console.error('Erro na inicialização:', err);
+            }
+
+            initEvents();
+        });
+    </script>
+</body>
+</html>
